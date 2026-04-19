@@ -1,0 +1,7 @@
+aiohttp
+aiohttp-socks
+beautifulsoup4
+pypinyin
+tqdm
+nest-asyncio
+lxml

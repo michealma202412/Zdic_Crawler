@@ -112,6 +112,22 @@ def extract_idiom_info(html: str, idiom: str):
 
     return result
 
+
+def extract_recommendations(html: str):
+    """从页面中提取推荐词或链接文本。"""
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "html.parser")
+    recommendations = []
+
+    for elem in soup.select('.nr-box a, .recommendation a, a.usual'):
+        text = elem.get_text(strip=True)
+        if text and text not in recommendations:
+            recommendations.append(text)
+
+    return recommendations
+
+
 def extract_multiple_readings_by_dot(soup, idiom):
     result = []
     all_p_tags = soup.find_all("p")
@@ -161,14 +177,92 @@ def extract_multiple_readings_by_dot(soup, idiom):
 
     return result
 
-def extract_recommendations(html: str):
+def extract_sat_topic_info(html: str, topic: str):
+    """提取 Khan Academy SAT 知识点信息"""
     soup = BeautifulSoup(html, "html.parser")
-    related = soup.select("div.nr-box a.usual, div.suggestword a, div.noresult a")
+    result = {
+        "structured_definitions": [],
+        "related_topics": []
+    }
+
+    # Khan Academy 页面结构分析
+    # 1. 页面标题
+    title_elem = soup.select_one('h1, ._1b7ozl9, [data-testid="unit-title"], [data-testid="lesson-title"]')
+    if not title_elem:
+        title_elem = soup.select_one('.title, ._o6nj3i, ._1l1qzyl')
+    title = title_elem.get_text(strip=True) if title_elem else topic
+
+    # 2. 学习目标/描述
+    description = ""
+    desc_elem = soup.select_one('.topic-summary, .description, p:first-of-type')
+    if desc_elem:
+        description = desc_elem.get_text(strip=True)
+    else:
+        # 查找页面中的主要段落
+        main_content = soup.select_one('main, [role="main"], ._w5j2sk')
+        if main_content:
+            paragraphs = main_content.select('p')
+            if paragraphs:
+                description = paragraphs[0].get_text(strip=True)[:500]  # 限制长度
+
+    # 3. 关键点/学习目标
+    key_points = []
     
-    def keep_only_chinese(text: str) -> str:
-        return re.sub(r"[^\u4e00-\u9fa5]", "", text)
+    # 查找学习目标列表
+    objectives = soup.select('.learning-objective, .learning-objectives li, ._1q8g1c4')
+    for obj in objectives[:10]:
+        text = obj.get_text(strip=True)
+        if text and len(text) > 10:
+            key_points.append(text)
+    
+    # 如果没有找到学习目标，查找技能列表
+    if not key_points:
+        skills = soup.select('.skill, [data-testid*="skill"], ._1k8e8d2')
+        for skill in skills[:10]:
+            text = skill.get_text(strip=True)
+            if text:
+                key_points.append(text)
+
+    # 4. 相关主题/课程
+    related_links = soup.select('a[href*="/test-prep/sat/"], [data-testid*="related"] a, ._1q8g1c4 a')
+    for link in related_links:
+        href = link.get('href', '')
+        text = link.get_text(strip=True)
+        if text and len(text) > 3 and '/test-prep/sat/' in href:
+            # 提取主题名称
+            clean_text = re.sub(r'^(Learn|Practice|Quiz|Test|Skill):\s*', '', text, flags=re.IGNORECASE)
+            if clean_text not in result["related_topics"]:
+                result["related_topics"].append(clean_text)
+
+    # 5. 构建结构化定义
+    if title or description or key_points:
+        result["structured_definitions"].append({
+            "source": "Khan Academy SAT",
+            "readings": [
+                {
+                    "title": title,
+                    "summary": description,
+                    "details": key_points,
+                    "examples": []
+                }
+            ]
+        })
+
+    return result
+
+def extract_related_topics(html: str):
+    """提取相关 SAT 知识点"""
+    soup = BeautifulSoup(html, "html.parser")
+    related = soup.select("a[href*='topic'], a[href*='lesson'], .related-topics a, .next-lesson a")
+
+    def clean_topic_text(text: str) -> str:
+        """清理知识点文本，移除多余字符"""
+        text = text.strip()
+        # 移除常见的前缀
+        text = re.sub(r"^(Learn|Practice|Quiz|Test):\s*", "", text, flags=re.IGNORECASE)
+        return text
 
     return [
-        keep_only_chinese(a.get_text(strip=True))
-        for a in related if a.get_text(strip=True)
+        clean_topic_text(a.get_text(strip=True))
+        for a in related if a.get_text(strip=True) and len(a.get_text(strip=True)) > 3
     ]

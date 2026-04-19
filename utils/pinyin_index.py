@@ -19,9 +19,11 @@ class PinyinIndex:
     def __init__(self, path: Path):
         self.path = path
         self.index: Dict[str, Set[str]] = {}
+        self.data = self.index
         if path.exists():
             raw = json.loads(path.read_text(encoding="utf-8"))
             self.index = {k: set(v) for k, v in raw.items()}
+            self.data = self.index
 
     def register(self, word: str, structured_definitions: List[Dict]):
         for block in structured_definitions:

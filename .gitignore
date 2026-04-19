@@ -1,0 +1,13 @@
+.pytest_cache/
+__pycache__/
+tests/__pycache__/
+utils/__pycache__/
+
+output_package/
+
+*.pyc
+*.pyo
+*.zip
+*.log
+
+temp_progress.json
